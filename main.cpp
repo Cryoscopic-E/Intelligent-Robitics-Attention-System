@@ -2,6 +2,7 @@
 
 #include <opencv2/opencv.hpp>
 #include <opencv2/highgui.hpp>
+#include <opencv2/objdetect.hpp>
 
 #include <yarp/os/SystemClock.h>
 #include <yarp/os/Network.h>
@@ -99,21 +100,38 @@ void ColorThresholding(ColorThreshold color, cv::Mat &inputImage, ImageOf<PixelR
 
 void SobelDerivative(cv::Mat &inputImage, ImageOf<PixelRgb> &outputImage)
 {
-    cv::Mat grayInput, gradient_x, gradient_y, abs_gradient_x, abs_gradient_y, out;
+    cv::Mat grayConv, gradient_x, gradient_y, abs_gradient_x, abs_gradient_y, out;
 
-    cv::cvtColor(inputImage, grayInput, CV_BGR2GRAY);
+    cv::cvtColor(inputImage, grayConv, CV_BGR2GRAY);
 
     //Gradient X
-    cv::Sobel(grayInput, gradient_x, CV_16S, 1, 0);
+    cv::Sobel(grayConv, gradient_x, CV_16S, 1, 0);
     cv::convertScaleAbs(gradient_x, abs_gradient_x);
 
     //Gradient Y
-    cv::Sobel(grayInput, gradient_y, CV_16S, 0, 1);
+    cv::Sobel(grayConv, gradient_y, CV_16S, 0, 1);
     cv::convertScaleAbs(gradient_y, abs_gradient_y);
 
     //Total Gradient
     cv::addWeighted(abs_gradient_x, 0.5, abs_gradient_y, 0.5, 0, out);
     cv::cvtColor(out, out, CV_GRAY2RGB);
+    memcpy(outputImage.getRawImage(), out.data, sizeof(unsigned char) * inputImage.rows * inputImage.cols * inputImage.channels());
+}
+
+void FaceDetection(cv::Mat &inputImage, ImageOf<PixelRgb> &outputImage, cv::CascadeClassifier &cascade)
+{
+    vector<cv::Rect> faces;
+    cv::Mat grayConv, out;
+    cv::cvtColor(inputImage, grayConv, CV_BGR2GRAY);
+    cascade.detectMultiScale(grayConv, faces, 1.1, 2, 0 | cv::CASCADE_SCALE_IMAGE, cv::Size(30, 30));
+    cv::cvtColor(grayConv, out, CV_GRAY2RGB);
+    //Draw boxes
+    for (size_t i = 0; i < faces.size(); i++)
+    {
+        cv::Rect r = faces[i];
+        cv::Scalar color = (0, 255, 0);
+        cv::rectangle(out, cvPoint(cvRound(r.x), cvRound(r.y)), cvPoint(cvRound(r.x + r.width - 1), cvRound(r.y + r.height - 1)), color, 3);
+    }
     memcpy(outputImage.getRawImage(), out.data, sizeof(unsigned char) * inputImage.rows * inputImage.cols * inputImage.channels());
 }
 
@@ -133,9 +151,19 @@ int main()
     BufferedPort<ImageOf<PixelRgb>> feedPort; //read input image
     BufferedPort<ImageOf<PixelRgb>> thPort;   //thresold output port
     BufferedPort<ImageOf<PixelRgb>> sdPort;   //sobel derivative port
+    BufferedPort<ImageOf<PixelRgb>> fdPort;   //face detection port
     feedPort.open("/img_proc/feed/in");
     thPort.open("/img_proc/threshold");
     sdPort.open("/img_proc/sobel");
+    fdPort.open("/img_proc/face");
+
+    /*CASCADE CLASSIFIER*/
+    cv::CascadeClassifier cc;
+    if (!cc.load("haarcascade_frontalface_alt.xml"))
+    {
+        printf("Error loading face cascade classifier\n");
+        return -1;
+    }
 
     Network::connect("/icubSim/cam/left", "/img_proc/feed/in");
     while (1)
@@ -143,13 +171,16 @@ int main()
         ImageOf<PixelRgb> *feedImage = feedPort.read();
         ImageOf<PixelRgb> &thImage = thPort.prepare();
         ImageOf<PixelRgb> &sdImage = sdPort.prepare();
-        thImage = *feedImage;
-        sdImage = *feedImage;
+        ImageOf<PixelRgb> &fdImage = fdPort.prepare();
+        thImage = sdImage = fdImage = *feedImage;
         cv::Mat cvFeedImage = yarp::cv::toCvMat(*feedImage);
         ColorThresholding(ColorThreshold::BLUE, cvFeedImage, thImage, true, true);
         SobelDerivative(cvFeedImage, sdImage);
+        FaceDetection(cvFeedImage, fdImage, cc);
         thPort.write();
         sdPort.write();
+        fdPort.write();
+        SystemClock::delaySystem(0.01);
     }
     return 0;
 }
