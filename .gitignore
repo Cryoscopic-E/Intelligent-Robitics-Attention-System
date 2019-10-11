@@ -1,0 +1,7 @@
+CMakeFiles/
+.vscode
+*.cmake
+CMakeCache.txt
+*pdf
+Makefile
+*.odt
