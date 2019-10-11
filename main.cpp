@@ -43,15 +43,14 @@ int init_grabber(PolyDriver *polyDriver)
     return 1;
 }
 
-void ColorThresholding(ColorThreshold color, ImageOf<PixelRgb> &inputImage, ImageOf<PixelRgb> &outputImage, bool usingHSV = true, bool applyBlur = false)
+void ColorThresholding(ColorThreshold color, cv::Mat &inputImage, ImageOf<PixelRgb> &outputImage, bool usingHSV = true, bool applyBlur = false)
 {
-    cv::Mat cvFeedImage, mask, out;
-    cvFeedImage = yarp::cv::toCvMat(inputImage);
+    cv::Mat mask, out;
     if (usingHSV) //USING HSV
     {
 
         cv::Mat hsv_conv;
-        cv::cvtColor(cvFeedImage, hsv_conv, cv::COLOR_BGR2HSV);
+        cv::cvtColor(inputImage, hsv_conv, cv::COLOR_BGR2HSV);
 
         switch (color)
         {
@@ -77,16 +76,16 @@ void ColorThresholding(ColorThreshold color, ImageOf<PixelRgb> &inputImage, Imag
         {
         default:
         case ColorThreshold::RED:
-            cv::inRange(cvFeedImage, cv::Scalar(0, 0, 170), cv::Scalar(80, 80, 225), mask);
+            cv::inRange(inputImage, cv::Scalar(0, 0, 170), cv::Scalar(80, 80, 225), mask);
             break;
         case ColorThreshold::GREEN:
-            cv::inRange(cvFeedImage, cv::Scalar(0, 0, 170), cv::Scalar(80, 80, 225), mask);
+            cv::inRange(inputImage, cv::Scalar(0, 0, 170), cv::Scalar(80, 80, 225), mask);
             break;
         case ColorThreshold::BLUE:
-            cv::inRange(cvFeedImage, cv::Scalar(0, 0, 170), cv::Scalar(80, 80, 225), mask);
+            cv::inRange(inputImage, cv::Scalar(0, 0, 170), cv::Scalar(80, 80, 225), mask);
             break;
         }
-        cv::bitwise_and(cvFeedImage, cvFeedImage, out, mask);
+        cv::bitwise_and(inputImage, inputImage, out, mask);
 
         cv::cvtColor(out, out, cv::COLOR_BGR2RGB);
     }
@@ -95,7 +94,27 @@ void ColorThresholding(ColorThreshold color, ImageOf<PixelRgb> &inputImage, Imag
     {
         cv::GaussianBlur(out, out, cv::Size(3, 3), 0);
     }
-    memcpy(outputImage.getRawImage(), out.data, sizeof(unsigned char) * cvFeedImage.rows * cvFeedImage.cols * cvFeedImage.channels());
+    memcpy(outputImage.getRawImage(), out.data, sizeof(unsigned char) * inputImage.rows * inputImage.cols * inputImage.channels());
+}
+
+void SobelDerivative(cv::Mat &inputImage, ImageOf<PixelRgb> &outputImage)
+{
+    cv::Mat grayInput, gradient_x, gradient_y, abs_gradient_x, abs_gradient_y, out;
+
+    cv::cvtColor(inputImage, grayInput, CV_BGR2GRAY);
+
+    //Gradient X
+    cv::Sobel(grayInput, gradient_x, CV_16S, 1, 0);
+    cv::convertScaleAbs(gradient_x, abs_gradient_x);
+
+    //Gradient Y
+    cv::Sobel(grayInput, gradient_y, CV_16S, 0, 1);
+    cv::convertScaleAbs(gradient_y, abs_gradient_y);
+
+    //Total Gradient
+    cv::addWeighted(abs_gradient_x, 0.5, abs_gradient_y, 0.5, 0, out);
+    cv::cvtColor(out, out, CV_GRAY2RGB);
+    memcpy(outputImage.getRawImage(), out.data, sizeof(unsigned char) * inputImage.rows * inputImage.cols * inputImage.channels());
 }
 
 int main()
@@ -113,19 +132,24 @@ int main()
     /* CREATE PORTS FOR IMG PROCESSING */
     BufferedPort<ImageOf<PixelRgb>> feedPort; //read input image
     BufferedPort<ImageOf<PixelRgb>> thPort;   //thresold output port
-
+    BufferedPort<ImageOf<PixelRgb>> sdPort;   //sobel derivative port
     feedPort.open("/img_proc/feed/in");
-    thPort.open("/img_proc/threshold/red");
+    thPort.open("/img_proc/threshold");
+    sdPort.open("/img_proc/sobel");
 
     Network::connect("/icubSim/cam/left", "/img_proc/feed/in");
     while (1)
     {
         ImageOf<PixelRgb> *feedImage = feedPort.read();
         ImageOf<PixelRgb> &thImage = thPort.prepare();
+        ImageOf<PixelRgb> &sdImage = sdPort.prepare();
         thImage = *feedImage;
-        ColorThresholding(ColorThreshold::BLUE, *feedImage, thImage, true, true);
-
+        sdImage = *feedImage;
+        cv::Mat cvFeedImage = yarp::cv::toCvMat(*feedImage);
+        ColorThresholding(ColorThreshold::BLUE, cvFeedImage, thImage, true, true);
+        SobelDerivative(cvFeedImage, sdImage);
         thPort.write();
+        sdPort.write();
     }
     return 0;
 }
