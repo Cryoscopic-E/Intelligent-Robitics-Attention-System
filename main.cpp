@@ -45,52 +45,28 @@ int init_grabber(PolyDriver *polyDriver)
     return 1;
 }
 
-void ColorThresholding(ColorThreshold color, cv::Mat &inputImage, ImageOf<PixelRgb> &outputImage, bool usingHSV = true, bool applyBlur = false)
+void ColorThresholding(ColorThreshold color, cv::Mat &inputImage, ImageOf<PixelRgb> &outputImage, bool applyBlur = false)
 {
-    cv::Mat mask, out;
-    if (usingHSV) //USING HSV
+    cv::Mat mask, out, hsv_conv;
+    cv::cvtColor(inputImage, hsv_conv, cv::COLOR_BGR2HSV);
+
+    switch (color)
     {
-
-        cv::Mat hsv_conv;
-        cv::cvtColor(inputImage, hsv_conv, cv::COLOR_BGR2HSV);
-
-        switch (color)
-        {
-        default:
-        case ColorThreshold::RED:
-            cv::inRange(hsv_conv, cv::Scalar(120, 120, 140), cv::Scalar(180, 250, 200), mask);
-            break;
-        case ColorThreshold::GREEN:
-            cv::inRange(hsv_conv, cv::Scalar(60, 110, 110), cv::Scalar(100, 220, 250), mask);
-            break;
-        case ColorThreshold::BLUE:
-            cv::inRange(hsv_conv, cv::Scalar(100, 100, 100), cv::Scalar(130, 255, 255), mask);
-            break;
-        }
-
-        cv::bitwise_and(hsv_conv, hsv_conv, out, mask);
-
-        cv::cvtColor(out, out, cv::COLOR_HSV2RGB);
+    default:
+    case ColorThreshold::RED:
+        cv::inRange(hsv_conv, cv::Scalar(0, 50, 50), cv::Scalar(10, 255, 255), mask);
+        break;
+    case ColorThreshold::GREEN:
+        cv::inRange(hsv_conv, cv::Scalar(50, 50, 50), cv::Scalar(70, 255, 255), mask);
+        break;
+    case ColorThreshold::BLUE:
+        cv::inRange(hsv_conv, cv::Scalar(90, 100, 0), cv::Scalar(180, 255, 255), mask);
+        break;
     }
-    else //USING BGR
-    {
-        switch (color)
-        {
-        default:
-        case ColorThreshold::RED:
-            cv::inRange(inputImage, cv::Scalar(0, 0, 170), cv::Scalar(80, 80, 225), mask);
-            break;
-        case ColorThreshold::GREEN:
-            cv::inRange(inputImage, cv::Scalar(0, 0, 170), cv::Scalar(80, 80, 225), mask);
-            break;
-        case ColorThreshold::BLUE:
-            cv::inRange(inputImage, cv::Scalar(0, 0, 170), cv::Scalar(80, 80, 225), mask);
-            break;
-        }
-        cv::bitwise_and(inputImage, inputImage, out, mask);
 
-        cv::cvtColor(out, out, cv::COLOR_BGR2RGB);
-    }
+    cv::bitwise_and(hsv_conv, hsv_conv, out, mask);
+
+    cv::cvtColor(out, out, cv::COLOR_HSV2RGB);
 
     if (applyBlur)
     {
@@ -153,8 +129,11 @@ void MarkerDetection(cv::Mat &inputImage, ImageOf<PixelRgb> &outputImage, cv::Pt
 
 int main()
 {
-
     Network::init();
+
+    /* STOP PROGRAM */
+    bool stop = false;
+
     /* INITIALIZE CAMERA AND CONNECT TO TEXTURE */
     PolyDriver grabber_dev;
     if (init_grabber(&grabber_dev) == -1)
@@ -174,6 +153,9 @@ int main()
     sdPort.open("/img_proc/sobel");
     fdPort.open("/img_proc/face");
     mdPort.open("/img_proc/marker");
+
+    ColorThreshold ct = ColorThreshold::BLUE;
+
     /*CASCADE CLASSIFIER*/
     cv::CascadeClassifier cc;
     if (!cc.load("haarcascade_frontalface_alt.xml"))
@@ -185,8 +167,8 @@ int main()
     cv::Ptr<cv::aruco::Dictionary> dict = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_4X4_250);
 
     Network::connect("/icubSim/cam/left", "/img_proc/feed/in");
-
-    while (1)
+    cv::namedWindow("Feed iCub", cv::WINDOW_AUTOSIZE);
+    while (!stop)
     {
         ImageOf<PixelRgb> *feedImage = feedPort.read();
         ImageOf<PixelRgb> &thImage = thPort.prepare();
@@ -195,7 +177,8 @@ int main()
         ImageOf<PixelRgb> &mdImage = mdPort.prepare();
         thImage = sdImage = fdImage = mdImage = *feedImage;
         cv::Mat cvFeedImage = yarp::cv::toCvMat(*feedImage);
-        ColorThresholding(ColorThreshold::BLUE, cvFeedImage, thImage, true, true);
+        cv::imshow("Feed iCub", cvFeedImage);
+        ColorThresholding(ct, cvFeedImage, thImage, true);
         SobelDerivative(cvFeedImage, sdImage);
         FaceDetection(cvFeedImage, fdImage, cc);
         MarkerDetection(cvFeedImage, mdImage, dict);
@@ -203,7 +186,32 @@ int main()
         sdPort.write();
         fdPort.write();
         mdPort.write();
-        SystemClock::delaySystem(0.01);
+
+        int key = cv::waitKey(3);
+        switch (key)
+        {
+        case 27:
+        case 'q':
+            stop = true;
+            break;
+        case 'r':
+            ct = ColorThreshold::RED;
+            break;
+        case 'g':
+            ct = ColorThreshold::GREEN;
+            break;
+        case 'b':
+            ct = ColorThreshold::BLUE;
+            break;
+        default:
+            break;
+        }
     }
+    feedPort.close();
+    thPort.close();
+    sdPort.close();
+    fdPort.close();
+    mdPort.close();
+    grabber_dev.close();
     return 0;
 }
