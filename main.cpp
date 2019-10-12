@@ -3,6 +3,7 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/highgui.hpp>
 #include <opencv2/objdetect.hpp>
+#include <opencv2/aruco.hpp>
 
 #include <yarp/os/SystemClock.h>
 #include <yarp/os/Network.h>
@@ -34,7 +35,6 @@ int init_grabber(PolyDriver *polyDriver)
     p.put("device", "grabber");
     p.put("subdevice", "opencv_grabber");
     p.put("name", "/grabber");
-    p.put("flip_y", "");
     polyDriver->open(p);
     if (!polyDriver->isValid())
     {
@@ -136,6 +136,21 @@ void FaceDetection(cv::Mat &inputImage, ImageOf<PixelRgb> &outputImage, cv::Casc
     memcpy(outputImage.getRawImage(), out.data, sizeof(unsigned char) * inputImage.rows * inputImage.cols * inputImage.channels());
 }
 
+void MarkerDetection(cv::Mat &inputImage, ImageOf<PixelRgb> &outputImage, cv::Ptr<cv::aruco::Dictionary> dict)
+{
+    cv::Mat out;
+    inputImage.copyTo(out);
+    vector<int> markersId;
+    vector<vector<cv::Point2f>> corners;
+    cv::aruco::detectMarkers(out, dict, corners, markersId);
+    if (markersId.size() > 0)
+    {
+        cv::aruco::drawDetectedMarkers(out, corners, markersId);
+    }
+    cv::cvtColor(out, out, CV_BGR2RGB);
+    memcpy(outputImage.getRawImage(), out.data, sizeof(unsigned char) * inputImage.rows * inputImage.cols * inputImage.channels());
+}
+
 int main()
 {
 
@@ -153,17 +168,21 @@ int main()
     BufferedPort<ImageOf<PixelRgb>> thPort;   //thresold output port
     BufferedPort<ImageOf<PixelRgb>> sdPort;   //sobel derivative port
     BufferedPort<ImageOf<PixelRgb>> fdPort;   //face detection port
+    BufferedPort<ImageOf<PixelRgb>> mdPort;   //marker detection port
     feedPort.open("/img_proc/feed/in");
     thPort.open("/img_proc/threshold");
     sdPort.open("/img_proc/sobel");
     fdPort.open("/img_proc/face");
-
+    mdPort.open("/img_proc/marker");
     /*CASCADE CLASSIFIER*/
     cv::CascadeClassifier cc;
     if (!cc.load("haarcascade_frontalface_alt.xml"))
     {
         printf("Error loading face cascade classifier\n");
     }
+
+    /*MARKERS DICTIONARY*/
+    cv::Ptr<cv::aruco::Dictionary> dict = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_4X4_250);
 
     Network::connect("/icubSim/cam/left", "/img_proc/feed/in");
     while (1)
@@ -172,14 +191,17 @@ int main()
         ImageOf<PixelRgb> &thImage = thPort.prepare();
         ImageOf<PixelRgb> &sdImage = sdPort.prepare();
         ImageOf<PixelRgb> &fdImage = fdPort.prepare();
-        thImage = sdImage = fdImage = *feedImage;
+        ImageOf<PixelRgb> &mdImage = mdPort.prepare();
+        thImage = sdImage = fdImage = mdImage = *feedImage;
         cv::Mat cvFeedImage = yarp::cv::toCvMat(*feedImage);
         ColorThresholding(ColorThreshold::BLUE, cvFeedImage, thImage, true, true);
         SobelDerivative(cvFeedImage, sdImage);
         FaceDetection(cvFeedImage, fdImage, cc);
+        MarkerDetection(cvFeedImage, mdImage, dict);
         thPort.write();
         sdPort.write();
         fdPort.write();
+        mdPort.write();
         SystemClock::delaySystem(0.01);
     }
     return 0;
