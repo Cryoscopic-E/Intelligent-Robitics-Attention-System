@@ -185,6 +185,7 @@ int main()
     cv::Ptr<cv::aruco::Dictionary> dict = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_4X4_250);
 
     Network::connect("/icubSim/cam/left", "/img_proc/feed/in");
+
     while (1)
     {
         ImageOf<PixelRgb> *feedImage = feedPort.read();
