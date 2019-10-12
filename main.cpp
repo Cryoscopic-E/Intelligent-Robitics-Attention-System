@@ -124,7 +124,7 @@ void FaceDetection(cv::Mat &inputImage, ImageOf<PixelRgb> &outputImage, cv::Casc
     cv::Mat grayConv, out;
     cv::cvtColor(inputImage, grayConv, CV_BGR2GRAY);
     cascade.detectMultiScale(grayConv, faces, 1.1, 2, 0 | cv::CASCADE_SCALE_IMAGE, cv::Size(30, 30));
-    cv::cvtColor(grayConv, out, CV_GRAY2RGB);
+    cv::cvtColor(inputImage, out, CV_BGR2RGB);
     //Draw boxes
     for (size_t i = 0; i < faces.size(); i++)
     {
@@ -162,7 +162,6 @@ int main()
     if (!cc.load("haarcascade_frontalface_alt.xml"))
     {
         printf("Error loading face cascade classifier\n");
-        return -1;
     }
 
     Network::connect("/icubSim/cam/left", "/img_proc/feed/in");
