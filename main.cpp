@@ -34,6 +34,7 @@ int init_grabber(PolyDriver *polyDriver)
     p.put("device", "grabber");
     p.put("subdevice", "opencv_grabber");
     p.put("name", "/grabber");
+    p.put("flip_y", "");
     polyDriver->open(p);
     if (!polyDriver->isValid())
     {
