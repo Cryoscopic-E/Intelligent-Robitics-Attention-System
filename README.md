@@ -2,9 +2,11 @@
 
 ## ICub Instructions
 
-1. `cmake .`
-2. `make`
-3. `./yarpy`
+1. `mkdir build`
+2. `cd build`
+3. `cmake ../`
+4. `make`
+5. `./yarpy`
 
 > Rember to lauch icub from the 'icub' folder containing the .ini file
 
