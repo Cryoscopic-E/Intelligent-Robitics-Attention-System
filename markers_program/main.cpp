@@ -1,6 +1,9 @@
 #include <opencv2/aruco.hpp>
 #include <opencv2/opencv.hpp>
 #include <opencv2/highgui.hpp>
+#include <sstream>
+#include <string>
+#include <iostream>
 
 const int maxNumber = 249;
 int numberSlider = 0;
@@ -23,8 +26,10 @@ int main()
     int key = cv::waitKey(0);
     if (key == 's')
     {
+        std::ostringstream ss;
+        ss << numberSlider;
         printf("Saving as 'marker%d'\n", numberSlider);
-        cv::imwrite("./marker" + std::to_string(numberSlider) + ".jpg", markerImage);
+        cv::imwrite("./marker" + ss.str() + ".jpg", markerImage);
     }
     return 0;
 
