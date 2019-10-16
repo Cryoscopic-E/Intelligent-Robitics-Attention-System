@@ -8,9 +8,9 @@
 4. `make`
 5. `./yarpy`
 
-> Rember to lauch icub from the 'icub' folder containing the .ini file
+> Remember to launch icub from the 'icub' folder containing the .ini file
 
-Use the bash script to launche the yarp views and connect them to the program ports
+Use the bash script to launch the yarp views and connect them to the program ports
 
 ``` bash
 ./launch_yarpviews
