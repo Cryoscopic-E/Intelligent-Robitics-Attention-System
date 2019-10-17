@@ -20,7 +20,7 @@ ImageAnalysis::~ImageAnalysis()
     _grabber_dev.close();
 }
 
-int     ImageAnalysis::initGrabber(PolyDriver *polyDriver)
+int ImageAnalysis::initGrabber(PolyDriver *polyDriver)
 {
     Property p;
 
@@ -28,42 +28,45 @@ int     ImageAnalysis::initGrabber(PolyDriver *polyDriver)
     p.put("subdevice", "opencv_grabber");
     p.put("name", "/grabber");
     polyDriver->open(p);
-    if (!polyDriver->isValid()) {
+    if (!polyDriver->isValid())
+    {
         return (-1);
     }
     Network::connect("/grabber", "/icubSim/texture/screen");
     return (1);
 }
 
-void    ImageAnalysis::colorThresholding(ImageAnalysis::ColorThreshold color, cv::Mat &inputImage, ImageOf <PixelRgb> &outputImage, bool applyBlur = false)
+void ImageAnalysis::colorThresholding(ImageAnalysis::ColorThreshold color, cv::Mat &inputImage, ImageOf<PixelRgb> &outputImage, bool applyBlur = false)
 {
     cv::Mat mask, out, hsv_conv;
     cv::cvtColor(inputImage, hsv_conv, cv::COLOR_BGR2HSV);
 
-    switch (color) {
-        default:
-        case ColorThreshold::RED:
-            cv::inRange(hsv_conv, cv::Scalar(0, 50, 50), cv::Scalar(10, 255, 255), mask);
-            break;
-        case ColorThreshold::GREEN:
-            cv::inRange(hsv_conv, cv::Scalar(50, 50, 50), cv::Scalar(70, 255, 255), mask);
-            break;
-        case ColorThreshold::BLUE:
-            cv::inRange(hsv_conv, cv::Scalar(90, 100, 0), cv::Scalar(180, 255, 255), mask);
-            break;
+    switch (color)
+    {
+    default:
+    case ColorThreshold::RED:
+        cv::inRange(hsv_conv, cv::Scalar(0, 50, 50), cv::Scalar(10, 255, 255), mask);
+        break;
+    case ColorThreshold::GREEN:
+        cv::inRange(hsv_conv, cv::Scalar(50, 50, 50), cv::Scalar(70, 255, 255), mask);
+        break;
+    case ColorThreshold::BLUE:
+        cv::inRange(hsv_conv, cv::Scalar(90, 100, 0), cv::Scalar(180, 255, 255), mask);
+        break;
     }
 
     cv::bitwise_and(hsv_conv, hsv_conv, out, mask);
 
     cv::cvtColor(out, out, cv::COLOR_HSV2RGB);
 
-    if (applyBlur) {
+    if (applyBlur)
+    {
         cv::GaussianBlur(out, out, cv::Size(3, 3), 0);
     }
     memcpy(outputImage.getRawImage(), out.data, sizeof(unsigned char) * inputImage.rows * inputImage.cols * inputImage.channels());
 }
 
-void    ImageAnalysis::sobelDerivative(cv::Mat &inputImage, ImageOf <PixelRgb> &outputImage)
+void ImageAnalysis::sobelDerivative(cv::Mat &inputImage, ImageOf<PixelRgb> &outputImage)
 {
     cv::Mat grayConv, gradient_x, gradient_y, abs_gradient_x, abs_gradient_y, out;
     cv::cvtColor(inputImage, grayConv, CV_BGR2GRAY);
@@ -82,16 +85,17 @@ void    ImageAnalysis::sobelDerivative(cv::Mat &inputImage, ImageOf <PixelRgb> &
     memcpy(outputImage.getRawImage(), out.data, sizeof(unsigned char) * inputImage.rows * inputImage.cols * inputImage.channels());
 }
 
-void    ImageAnalysis::faceDetection(cv::Mat &inputImage, ImageOf <PixelRgb> &outputImage, cv::CascadeClassifier &cascade)
+void ImageAnalysis::faceDetection(cv::Mat &inputImage, ImageOf<PixelRgb> &outputImage, cv::CascadeClassifier &cascade)
 {
     vector<cv::Rect> faces;
     cv::Mat grayConv, out;
     cv::cvtColor(inputImage, grayConv, CV_BGR2GRAY);
-    //cascade.detectMultiScale(grayConv, faces, 1.1, 2, 0 | cv::CASCADE_SCALE_IMAGE, cv::Size(30, 30));
+    cascade.detectMultiScale(grayConv, faces, 1.1, 2, 0 | cv::CASCADE_SCALE_IMAGE, cv::Size(30, 30));
     cv::cvtColor(inputImage, out, CV_BGR2RGB);
     //Draw boxes
 
-    for (size_t i = 0; i < faces.size(); i++) {
+    for (size_t i = 0; i < faces.size(); i++)
+    {
         cv::Rect r = faces[i];
         cv::Scalar color = (0, 255, 0);
         cv::rectangle(out, cvPoint(cvRound(r.x), cvRound(r.y)), cvPoint(cvRound(r.x + r.width - 1), cvRound(r.y + r.height - 1)), color, 3);
@@ -99,7 +103,7 @@ void    ImageAnalysis::faceDetection(cv::Mat &inputImage, ImageOf <PixelRgb> &ou
     memcpy(outputImage.getRawImage(), out.data, sizeof(unsigned char) * inputImage.rows * inputImage.cols * inputImage.channels());
 }
 
-void    ImageAnalysis::markerDetection(cv::Mat &inputImage, ImageOf <PixelRgb> &outputImage)
+void ImageAnalysis::markerDetection(cv::Mat &inputImage, ImageOf<PixelRgb> &outputImage)
 {
     cv::Mat out;
     inputImage.copyTo(out);
@@ -107,14 +111,15 @@ void    ImageAnalysis::markerDetection(cv::Mat &inputImage, ImageOf <PixelRgb> &
     vector<vector<cv::Point2f>> corners;
     cv::aruco::detectMarkers(out, _dict, corners, markersId);
 
-    if (markersId.size() > 0) {
+    if (markersId.size() > 0)
+    {
         cv::aruco::drawDetectedMarkers(out, corners, markersId);
     }
     cv::cvtColor(out, out, CV_BGR2RGB);
     memcpy(outputImage.getRawImage(), out.data, sizeof(unsigned char) * inputImage.rows * inputImage.cols * inputImage.channels());
 }
 
-int    ImageAnalysis::runAnalysis()
+int ImageAnalysis::runAnalysis()
 {
     /* INITIALIZE CAMERA AND CONNECT TO TEXTURE */
     PolyDriver grabber_dev;
@@ -173,7 +178,7 @@ int    ImageAnalysis::runAnalysis()
     return (0);
 }
 
-int     ImageAnalysis::initImageAnalysis()
+int ImageAnalysis::initImageAnalysis()
 {
     /* STOP PROGRAM */
     _stop = false;
@@ -197,7 +202,8 @@ int     ImageAnalysis::initImageAnalysis()
     _ct = ColorThreshold::BLUE;
 
     /*CASCADE CLASSIFIER*/
-    if (!_cc.load("../haarcascade_frontalface_alt.xml")) {
+    if (!_cc.load("../haarcascade_frontalface_alt.xml"))
+    {
         printf("Error loading face cascade classifier\n");
     }
 
