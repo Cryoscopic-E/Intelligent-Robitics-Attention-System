@@ -4,7 +4,7 @@
 ** Authors: Dale Carter, Rohit Chakraborty, Lucas Dumy, Solène Navaro, Emanuele De Pellegrin
 */
 
-#include "RobotMoves.hpp"
+#include "../headers/RobotMoves.hpp"
 
 RobotMoves::RobotMoves()
 {
