@@ -6,15 +6,15 @@
 # Replace "yarpy" with whatever your executable should be called.
 
 cmake_minimum_required(VERSION 3.5)
-project(yarpy)
+project(attention_system)
 
 # Find YARP.  Point the YARP_DIR environment variable at your build.
 find_package(YARP REQUIRED)
 find_package(OpenCV REQUIRED)
 
 # Search for source code.
-file(GLOB folder_source *.cpp *.cc *.c)
-file(GLOB folder_header *.h)
+file(GLOB folder_source ./source/*.cpp)
+file(GLOB folder_header ./headers/*.h ./headers/*.hpp)
 
 # Search for IDL files.
 file(GLOB idl_files *.thrift *.msg *.srv)
