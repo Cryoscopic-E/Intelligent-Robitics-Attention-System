@@ -118,14 +118,14 @@ int    ImageAnalysis::runAnalysis()
 {
     /* INITIALIZE CAMERA AND CONNECT TO TEXTURE */
     PolyDriver grabber_dev;
-    if (initGrabber(&grabber_dev) == -1)
-    {
+    if (initGrabber(&grabber_dev) == -1) {
         printf("Failed to Initialize Webcam\n");
         return (-1);
     }
 
-    while (!_stop)
-    {
+    _robot.initRobot();
+
+    while (!_stop) {
         ImageOf<PixelRgb> *feedImage = _feedPort.read();
         ImageOf<PixelRgb> &thImage = _thPort.prepare();
         ImageOf<PixelRgb> &sdImage = _sdPort.prepare();
@@ -144,9 +144,16 @@ int    ImageAnalysis::runAnalysis()
         _mdPort.write();
 
         int key = cv::waitKey(3);
-        switch (key)
-        {
-        case 27:
+        switch (key) {
+        case 'a':
+            _robot.fuckYou();
+            break;
+        case 'z':
+            _robot.resetRightArm();
+            break;
+        case 'e':
+            _robot.riseRightArm();
+            break;
         case 'q':
             _stop = true;
             break;
@@ -175,8 +182,7 @@ int     ImageAnalysis::initImageAnalysis()
 
     /* INITIALIZE CAMERA AND CONNECT TO TEXTURE */
     PolyDriver grabber_dev;
-    if (initGrabber(&grabber_dev) == -1)
-    {
+    if (initGrabber(&grabber_dev) == -1) {
         printf("Failed to Initialize Webcam\n");
         return (-1);
     }

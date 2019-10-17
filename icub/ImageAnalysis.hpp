@@ -26,6 +26,8 @@
 #include <yarp/cv/Cv.h>
 #include <yarp/cv/Cv-inl.h>
 
+#include "RobotMoves.hpp"
+
 using namespace std;
 using namespace yarp::os;
 using namespace yarp::sig;
@@ -52,6 +54,7 @@ class ImageAnalysis {
     void    faceDetection(cv::Mat &inputImage, ImageOf<PixelRgb> &outputImage, cv::CascadeClassifier &cascade);
     void    markerDetection(cv::Mat &inputImage, ImageOf<PixelRgb> &outputImage);
 
+    RobotMoves _robot;
     bool    _stop;
     PolyDriver _grabber_dev;
     ColorThreshold _ct;
