@@ -1,3 +1,0 @@
-/home/dale/Documents/HRI/Lab3/rightArm/build/CMakeFiles/edit_cache.dir
-/home/dale/Documents/HRI/Lab3/rightArm/build/CMakeFiles/rebuild_cache.dir
-/home/dale/Documents/HRI/Lab3/rightArm/build/CMakeFiles/rightArm.dir

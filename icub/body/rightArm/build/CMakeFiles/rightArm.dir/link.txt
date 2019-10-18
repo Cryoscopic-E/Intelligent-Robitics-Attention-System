@@ -1,1 +1,0 @@
-/usr/bin/c++      CMakeFiles/rightArm.dir/moveRightArm.cpp.o  -o rightArm /usr/local/lib/libYARP_init.so.3.2.1 /usr/local/lib/libYARP_dev.so.3.2.1 /usr/local/lib/libYARP_math.so.3.2.1 /usr/local/lib/libYARP_sig.so.3.2.1 /usr/local/lib/libYARP_OS.so.3.2.1 -Wl,-rpath,/usr/local/lib 
