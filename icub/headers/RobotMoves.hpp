@@ -8,6 +8,7 @@
 #define INTELLIGENT_ROBITICS_ATTENTION_SYSTEM_ROBOTMOVES_HPP
 
 #include <iostream>
+#include <utility>
 #include <yarp/os/all.h>
 #include <yarp/sig/all.h>
 #include <yarp/dev/all.h>
@@ -22,13 +23,16 @@ class RobotMoves {
     ~RobotMoves();
 
     int     initRobot();
+    void    lookAt(std::pair<double, double> pos);
     void    riseRightArm();
     void    resetRightArm();
     void    fuckYou();
 
     private:
-    Vector  _rightArm;
-    Property _options;
+    Vector      _rightArm;
+    Vector      _head;
+    Property    _armOptions;
+    Property    _headOptions;
 };
 
 #endif //INTELLIGENT_ROBITICS_ATTENTION_SYSTEM_ROBOTMOVES_HPP

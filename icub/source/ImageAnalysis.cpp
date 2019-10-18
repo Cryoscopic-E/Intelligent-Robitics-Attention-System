@@ -36,7 +36,7 @@ int ImageAnalysis::initGrabber(PolyDriver *polyDriver)
     return (1);
 }
 
-void ImageAnalysis::colorThresholding(ImageAnalysis::ColorThreshold color, cv::Mat &inputImage, ImageOf<PixelRgb> &outputImage, bool applyBlur = false)
+void ImageAnalysis::colorThresholding(ImageAnalysis::ColorThreshold color, cv::Mat &inputImage, ImageOf<PixelRgb> &outputImage)
 {
     cv::Mat mask, out, hsv_conv;
     cv::cvtColor(inputImage, hsv_conv, cv::COLOR_BGR2HSV);
@@ -59,10 +59,7 @@ void ImageAnalysis::colorThresholding(ImageAnalysis::ColorThreshold color, cv::M
 
     cv::cvtColor(out, out, cv::COLOR_HSV2RGB);
 
-    if (applyBlur)
-    {
-        cv::GaussianBlur(out, out, cv::Size(3, 3), 0);
-    }
+    cv::GaussianBlur(out, out, cv::Size(3, 3), 0);
     memcpy(outputImage.getRawImage(), out.data, sizeof(unsigned char) * inputImage.rows * inputImage.cols * inputImage.channels());
 }
 
@@ -94,11 +91,13 @@ void ImageAnalysis::faceDetection(cv::Mat &inputImage, ImageOf<PixelRgb> &output
     cv::cvtColor(inputImage, out, CV_BGR2RGB);
     //Draw boxes
 
+    _faceRecognized = false;
     for (size_t i = 0; i < faces.size(); i++)
     {
         cv::Rect r = faces[i];
         cv::Scalar color = (0, 255, 0);
         cv::rectangle(out, cvPoint(cvRound(r.x), cvRound(r.y)), cvPoint(cvRound(r.x + r.width - 1), cvRound(r.y + r.height - 1)), color, 3);
+        _faceRecognized = true;
     }
     memcpy(outputImage.getRawImage(), out.data, sizeof(unsigned char) * inputImage.rows * inputImage.cols * inputImage.channels());
 }
@@ -119,6 +118,47 @@ void ImageAnalysis::markerDetection(cv::Mat &inputImage, ImageOf<PixelRgb> &outp
     memcpy(outputImage.getRawImage(), out.data, sizeof(unsigned char) * inputImage.rows * inputImage.cols * inputImage.channels());
 }
 
+void    ImageAnalysis::locateRedColor(ImageOf<PixelRgb> *feedImage)
+{
+    if (feedImage != NULL) {
+        double xMean = 0;
+        double yMean = 0;
+        int colourThreshold = 0;
+
+        for (int x = 0; x < feedImage->width(); x++) {
+            for (int y = 0; y < feedImage->height(); y++) {
+                PixelRgb &pixel = feedImage->pixel(x, y);
+
+                if (pixel.b > pixel.r * 2 + 10 && pixel.b > pixel.g * 2 + 10) {
+                    xMean += x;
+                    yMean += y;
+                    colourThreshold++;
+                }
+            }
+        }
+        if (colourThreshold > 0) {
+            xMean /= colourThreshold;
+            yMean /= colourThreshold;
+        }
+
+        _redPos.first = xMean;
+        _redPos.second = yMean;
+        _redPos.first -= 320 / 2;
+        _redPos.second -= 240 / 2;
+        _redPos.first *= 0.2;
+        _redPos.second *= -0.2;
+
+        if (colourThreshold >
+            (feedImage->width() / 20) * (feedImage->height() / 20)) {
+            _redTracked = true;
+        } else {
+            _redTracked = false;
+            _redPos.first = 0;
+            _redPos.second = 0;
+        }
+    }
+}
+
 int ImageAnalysis::runAnalysis()
 {
     /* INITIALIZE CAMERA AND CONNECT TO TEXTURE */
@@ -127,6 +167,7 @@ int ImageAnalysis::runAnalysis()
         printf("Failed to Initialize Webcam\n");
         return (-1);
     }
+    std::cout << "We got an image." << std::endl;
 
     _robot.initRobot();
 
@@ -139,7 +180,7 @@ int ImageAnalysis::runAnalysis()
         thImage = sdImage = fdImage = mdImage = *feedImage;
         cv::Mat cvFeedImage = yarp::cv::toCvMat(*feedImage);
         cv::imshow("Feed iCub", cvFeedImage);
-        colorThresholding(_ct, cvFeedImage, thImage, true);
+        colorThresholding(_ct, cvFeedImage, thImage);
         sobelDerivative(cvFeedImage, sdImage);
         faceDetection(cvFeedImage, fdImage, _cc);
         markerDetection(cvFeedImage, mdImage);
@@ -148,7 +189,16 @@ int ImageAnalysis::runAnalysis()
         _fdPort.write();
         _mdPort.write();
 
-        int key = cv::waitKey(3);
+        if (_faceRecognized) {
+            _robot.fuckYou();
+        } else {
+            _robot.resetRightArm();
+        }
+
+        locateRedColor(feedImage);
+        _robot.lookAt(_redPos);
+
+        /*int key = cv::waitKey(3);
         switch (key) {
         case 'a':
             _robot.fuckYou();
@@ -173,7 +223,7 @@ int ImageAnalysis::runAnalysis()
             break;
         default:
             break;
-        }
+        }*/
     }
     return (0);
 }

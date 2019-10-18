@@ -8,6 +8,7 @@
 #define INTELLIGENT_ROBITICS_ATTENTION_SYSTEM_IMAGEANALYSIS_HPP
 
 #include <cstdio>
+#include <utility>
 
 #include <opencv2/opencv.hpp>
 #include <opencv2/highgui.hpp>
@@ -49,13 +50,17 @@ class ImageAnalysis {
 
     private:
     int     initGrabber(PolyDriver *polyDriver);
-    void    colorThresholding(ColorThreshold color, cv::Mat &inputImage, ImageOf<PixelRgb> &outputImage, bool applyBlur);
+    void    locateRedColor(ImageOf<PixelRgb> *feedImage);
+    void    colorThresholding(ColorThreshold color, cv::Mat &inputImage, ImageOf<PixelRgb> &outputImage);
     void    sobelDerivative(cv::Mat &inputImage, ImageOf<PixelRgb> &outputImage);
     void    faceDetection(cv::Mat &inputImage, ImageOf<PixelRgb> &outputImage, cv::CascadeClassifier &cascade);
     void    markerDetection(cv::Mat &inputImage, ImageOf<PixelRgb> &outputImage);
 
     RobotMoves _robot;
     bool    _stop;
+    bool    _faceRecognized;
+    bool    _redTracked;
+    std::pair<double, double>   _redPos;
     PolyDriver _grabber_dev;
     ColorThreshold _ct;
     cv::CascadeClassifier _cc;

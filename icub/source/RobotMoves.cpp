@@ -16,16 +16,54 @@ RobotMoves::~RobotMoves()
 
 int     RobotMoves::initRobot()
 {
-    _options.put("device", "remote_controlboard");
-    _options.put("local", "/test/client");
-    _options.put("remote", "/icubSim/right_arm");
+    _armOptions.put("device", "remote_controlboard");
+    _armOptions.put("local", "/test/client");
+    _armOptions.put("remote", "/icubSim/right_arm");
+    _headOptions.put("device", "remote_controlboard");
+    _headOptions.put("local", "/tutorial/motor/client");
+    _headOptions.put("remote", "/icubSim/head");
 
     return (0);
 }
 
+void    RobotMoves::lookAt(std::pair<double, double> targetPos)
+{
+    PolyDriver robotHead(_headOptions);
+    if (!robotHead.isValid()) {
+        std::cout << "Cannot connect to robot head." << std::endl;
+        return ;
+    }
+
+    IPositionControl    *pos;
+    IVelocityControl    *vel;
+    IEncoders           *enc;
+    robotHead.view(pos);
+    robotHead.view(vel);
+    robotHead.view(enc);
+    if (pos==NULL || vel==NULL || enc==NULL) {
+        std::cout << "Interface to robot head unavailable." << std::endl;
+        robotHead.close();
+        return ;
+    }
+    int jnts = 0;
+
+    pos->getAxes(&jnts);
+    _head.resize(jnts);
+
+    std::cout << "looking to " << targetPos.first << " - " << targetPos.second << std::endl;
+    _head[0] = targetPos.second;
+    _head[1] = 0;
+    _head[2] = targetPos.first * -1;
+    _head[3] = 0;
+    _head[4] = 0;
+    _head[5] = 0;
+
+    pos->positionMove(_head.data());
+}
+
 void    RobotMoves::riseRightArm()
 {
-    PolyDriver robotDevice(_options);
+    PolyDriver robotDevice(_armOptions);
     if (!robotDevice.isValid()) {
         std::cout << "Cannot connect to right arm." << std::endl;
         return ;
@@ -69,7 +107,7 @@ void    RobotMoves::riseRightArm()
 
 void    RobotMoves::resetRightArm()
 {
-    PolyDriver robotDevice(_options);
+    PolyDriver robotDevice(_armOptions);
     if (!robotDevice.isValid()) {
         std::cout << "Cannot connect to right arm." << std::endl;
         return ;
@@ -113,7 +151,7 @@ void    RobotMoves::resetRightArm()
 
 void    RobotMoves::fuckYou()
 {
-    PolyDriver robotDevice(_options);
+    PolyDriver robotDevice(_armOptions);
     if (!robotDevice.isValid()) {
         std::cout << "Cannot connect to right arm." << std::endl;
         return ;
