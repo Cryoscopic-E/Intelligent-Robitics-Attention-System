@@ -98,16 +98,17 @@ void ImageAnalysis::faceDetection(cv::Mat &inputImage, ImageOf<PixelRgb> &output
         cv::Scalar color = (0, 255, 0);
         cv::rectangle(out, cvPoint(cvRound(r.x), cvRound(r.y)), cvPoint(cvRound(r.x + r.width - 1), cvRound(r.y + r.height - 1)), color, 3);
 
-        cv::Mat faceROI = out(faces[i]);
+        cv::Mat faceROI = out(r);
         vector<cv::Rect> eyes;
 
         // Detect eyes in each face
         eyesCascade.detectMultiScale(faceROI, eyes, 1.1, 2, 0 | cv::CASCADE_SCALE_IMAGE, cv::Size(30, 30));
         for (size_t j = 0; j < eyes.size(); j++)
         {
-            cv::Point centreEye(faces[i].x + eyes[j].x + eyes[j].width / 2, faces[i].y + eyes[j].y + eyes[j].height / 2);
-            int radius = cvRound((eyes[j].width + eyes[j].height) * 0.25);
-            cv::circle( out, centreEye, radius, cv::Scalar( 255, 0, 0 ), 4, 8, 0 );
+            cv::Rect e = eyes[j];
+            cv::Point centreEye(r.x + e.x + e.width / 2, r.y + e.y + e.height / 2);
+            int radius = cvRound((e.width + e.height) * 0.25);
+            cv::circle(out, centreEye, radius, cv::Scalar(255, 0, 0), 4, 8, 0);
             _faceRecognized = true;
         }
     }
