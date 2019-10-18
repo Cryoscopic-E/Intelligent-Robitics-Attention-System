@@ -85,7 +85,7 @@ void ImageAnalysis::sobelDerivative(cv::Mat &inputImage, ImageOf<PixelRgb> &outp
     memcpy(outputImage.getRawImage(), out.data, sizeof(unsigned char) * inputImage.rows * inputImage.cols * inputImage.channels());
 }
 
-void ImageAnalysis::faceDetection(cv::Mat &inputImage, ImageOf<PixelRgb> &outputImage, cv::CascadeClassifier &cascade)
+void ImageAnalysis::faceDetection(cv::Mat &inputImage, ImageOf<PixelRgb> &outputImage, cv::CascadeClassifier &cascade, cv::CascadeClassifier &eyesCascade)
 {
     vector<cv::Rect> faces;
     cv::Mat grayConv, out;
@@ -99,6 +99,18 @@ void ImageAnalysis::faceDetection(cv::Mat &inputImage, ImageOf<PixelRgb> &output
         cv::Rect r = faces[i];
         cv::Scalar color = (0, 255, 0);
         cv::rectangle(out, cvPoint(cvRound(r.x), cvRound(r.y)), cvPoint(cvRound(r.x + r.width - 1), cvRound(r.y + r.height - 1)), color, 3);
+
+        cv::Mat faceROI = out(faces[i]);
+        vector<cv::Rect> eyes;
+
+        // Detect eyes in each face
+        eyesCascade.detectMultiScale(faceROI, eyes, 1.1, 2, 0 | cv::CASCADE_SCALE_IMAGE, cv::Size(30, 30));
+        for (size_t j = 0; j < eyes.size(); j++)
+        {
+            cv::Point centreEye(faces[i].x + eyes[j].x + eyes[j].width / 2, faces[i].y + eyes[j].y + eyes[j].height / 2);
+            int radius = cvRound((eyes[j].width + eyes[j].height) * 0.25);
+            cv::circle( out, centreEye, radius, cv::Scalar( 255, 0, 0 ), 4, 8, 0 );
+        }
     }
     memcpy(outputImage.getRawImage(), out.data, sizeof(unsigned char) * inputImage.rows * inputImage.cols * inputImage.channels());
 }
@@ -141,7 +153,7 @@ int ImageAnalysis::runAnalysis()
         cv::imshow("Feed iCub", cvFeedImage);
         colorThresholding(_ct, cvFeedImage, thImage, true);
         sobelDerivative(cvFeedImage, sdImage);
-        faceDetection(cvFeedImage, fdImage, _cc);
+        faceDetection(cvFeedImage, fdImage, _cc, _cce);
         markerDetection(cvFeedImage, mdImage);
         _thPort.write();
         _sdPort.write();
@@ -205,6 +217,11 @@ int ImageAnalysis::initImageAnalysis()
     if (!_cc.load("../haarcascade_frontalface_alt.xml"))
     {
         printf("Error loading face cascade classifier\n");
+    }
+
+    if (!_cce.load("../haarcascade_eye_tree_eyeglasses.xml"))
+    {
+        printf("Error loading eye cascade classifier\n");
     }
 
     /*MARKERS DICTIONARY*/
