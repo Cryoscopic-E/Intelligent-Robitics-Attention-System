@@ -53,7 +53,7 @@ class ImageAnalysis {
     void    locateRedColor(ImageOf<PixelRgb> *feedImage);
     void    colorThresholding(ColorThreshold color, cv::Mat &inputImage, ImageOf<PixelRgb> &outputImage);
     void    sobelDerivative(cv::Mat &inputImage, ImageOf<PixelRgb> &outputImage);
-    void    faceDetection(cv::Mat &inputImage, ImageOf<PixelRgb> &outputImage, cv::CascadeClassifier &cascade);
+    void    faceDetection(cv::Mat &inputImage, ImageOf<PixelRgb> &outputImage, cv::CascadeClassifier &cascade, cv::CascadeClassifier &eyesCascade);
     void    markerDetection(cv::Mat &inputImage, ImageOf<PixelRgb> &outputImage);
 
     RobotMoves _robot;
@@ -64,6 +64,7 @@ class ImageAnalysis {
     PolyDriver _grabber_dev;
     ColorThreshold _ct;
     cv::CascadeClassifier _cc;
+    cv::CascadeClassifier _cce;
     cv::Ptr<cv::aruco::Dictionary> _dict;
     BufferedPort<ImageOf<PixelRgb>> _feedPort; //read input image
     BufferedPort<ImageOf<PixelRgb>> _thPort;   //threshold output port
