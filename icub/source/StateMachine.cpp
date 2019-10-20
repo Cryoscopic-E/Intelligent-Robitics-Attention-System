@@ -5,7 +5,9 @@ StateMachine::StateMachine()
 {
     currentState = Transition::State::IDLE;
     lastEvent = Transition::Event::NO_EVENT;
-
+    // Transition table
+    // rows: current state
+    // columns: last event happend
     transitionTable = {
         {Transition(Transition::State::IDLE, &RobotMoves::idle),
          Transition(Transition::State::FACE, &RobotMoves::followFace),
@@ -41,7 +43,8 @@ void StateMachine::OnEvent(Transition::Event newEvent)
 
 void StateMachine::Execute()
 {
+    // call the function with the current context robot
     (_robot->*(transitionTable[currentState][lastEvent].function))();
+    // change current state after transition
     currentState = transitionTable[currentState][lastEvent].newState;
-    //printf("Current State: %d      Last Event: %d\n", currentState, lastEvent);
 }

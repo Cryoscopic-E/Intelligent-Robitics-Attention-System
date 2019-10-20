@@ -10,25 +10,20 @@
 #include "RobotMoves.hpp"
 
 #include <vector>
-/*
-                    NOEVENT   |   FACE_DETECTED   |   MARKER_DETECTED   |   CIRCLE_DETECTED  (newEvent)
 
-    IDLE           doNothing  |    lookatFace     |    lookAtMarker     |    gestureCircle
-
-    FACE           doNothing  |    lookAtFace     |    lookAtMarker     |    lookAtFace              
-
-    MARKER         doNothing  |    lookAtMarker   |    lookAtMarker     |    lookAtMarker
-
-    CIRCLE         doNothing  |    lookAtFace     |    gestureCircle     |    gestureCircle
-
-    (currentState)
-*/
-
+/**
+ *  StateMachine class
+ * 
+ * The state machine handles the state changes, it has a table of all possible transition that can happen 
+ * */
 class StateMachine
 {
 public:
+    // called every time a detection is registerd
     void OnEvent(Transition::Event);
+    // execute the function linked to the transition
     void Execute();
+    // set che context robot responsible of the transitions
     void SetRobot(RobotMoves &);
     StateMachine();
     ~StateMachine();

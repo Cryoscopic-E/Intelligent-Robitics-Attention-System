@@ -25,7 +25,9 @@ ImageAnalysis::~ImageAnalysis()
 int ImageAnalysis::initGrabber(PolyDriver *polyDriver)
 {
     Property p;
-
+    /*
+        Initialize a new opencv grabber
+    */
     p.put("device", "grabber");
     p.put("subdevice", "opencv_grabber");
     p.put("name", "/grabber");
@@ -34,15 +36,19 @@ int ImageAnalysis::initGrabber(PolyDriver *polyDriver)
     {
         return (-1);
     }
+    // connect the grabber to the icub simulation texture
     Network::connect("/grabber", "/icubSim/texture/screen");
     return (1);
 }
 
 void ImageAnalysis::colorThresholding(ImageAnalysis::ColorThreshold color, cv::Mat &inputImage, ImageOf<PixelRgb> &outputImage)
 {
+    // create the mask for the color, the output image and the conversion to hsv temporary matrices
     cv::Mat mask, out, hsv_conv;
+    // convert bgr to hsv
     cv::cvtColor(inputImage, hsv_conv, cv::COLOR_BGR2HSV);
 
+    // create a color mask based on the color argument, the ranges were defined with an external program
     switch (color)
     {
     default:
@@ -56,12 +62,11 @@ void ImageAnalysis::colorThresholding(ImageAnalysis::ColorThreshold color, cv::M
         cv::inRange(hsv_conv, cv::Scalar(90, 100, 0), cv::Scalar(180, 255, 255), mask);
         break;
     }
-
+    // apply bitwise & using the color mask created
     cv::bitwise_and(hsv_conv, hsv_conv, out, mask);
-
+    // convert the image back to rgb
     cv::cvtColor(out, out, cv::COLOR_HSV2RGB);
-
-    cv::GaussianBlur(out, out, cv::Size(3, 3), 0);
+    // memory copy the output matrice data in the yarp Imageof<PixelRgb>
     memcpy(outputImage.getRawImage(), out.data, sizeof(unsigned char) * inputImage.rows * inputImage.cols * inputImage.channels());
 }
 
@@ -160,12 +165,12 @@ void ImageAnalysis::circleDetection(cv::Mat &inputImage, ImageOf<PixelRgb> &outp
     cv::Mat gryImg, out;
     // Convert it to gray - needed for this function but shouldn't when integrated
     cv::cvtColor(inputImage, gryImg, cv::COLOR_RGB2GRAY);
-    medianBlur(gryImg, gryImg, 5);
-    // Reduce the noise so we avoid false circle detection - needed for the function but shouldn't when integrated
-    //GaussianBlur(gryImg, gryImg, Size(9, 9), 2, 2 );
-    vector<cv::Vec3f> circles; // Create a vector of size 3 for the circle definition
+    // Reduce the noise so we avoid false circle detection
+    cv::medianBlur(gryImg, gryImg, 5);
+    // Create a vector of size 3 for the circle definition
+    vector<cv::Vec3f> circles;
 
-    HoughCircles(gryImg, circles, CV_HOUGH_GRADIENT, 2, (gryImg.rows / 4), 200, 100); // (min_radius & max_radius) to detect large circles
+    cv::HoughCircles(gryImg, circles, CV_HOUGH_GRADIENT, 2, (gryImg.rows / 4), 200, 100); // (min_radius & max_radius) to detect large circles
     if (circles.size() > 0)
     {
         _stateMachine.OnEvent(Transition::Event::CIRCLE_DETECTED);
@@ -249,7 +254,7 @@ int ImageAnalysis::initImageAnalysis()
     _mdPort.open("/img_proc/marker");
     _cdPort.open("/img_proc/circle");
 
-    _ct = ColorThreshold::BLUE;
+    _ct = ColorThreshold::GREEN;
 
     /*CASCADE CLASSIFIER*/
     if (!_cc.load("../haarcascade_frontalface_alt.xml"))
