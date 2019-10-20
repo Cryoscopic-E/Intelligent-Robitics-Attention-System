@@ -5,6 +5,7 @@
 */
 
 #include "ImageAnalysis.hpp"
+#include "Transition.hpp"
 
 ImageAnalysis::ImageAnalysis()
 {
@@ -17,13 +18,16 @@ ImageAnalysis::~ImageAnalysis()
     _sdPort.close();
     _fdPort.close();
     _mdPort.close();
+    _cdPort.close();
     _grabber_dev.close();
 }
 
 int ImageAnalysis::initGrabber(PolyDriver *polyDriver)
 {
     Property p;
-
+    /*
+        Initialize a new opencv grabber
+    */
     p.put("device", "grabber");
     p.put("subdevice", "opencv_grabber");
     p.put("name", "/grabber");
@@ -32,15 +36,19 @@ int ImageAnalysis::initGrabber(PolyDriver *polyDriver)
     {
         return (-1);
     }
+    // connect the grabber to the icub simulation texture
     Network::connect("/grabber", "/icubSim/texture/screen");
     return (1);
 }
 
 void ImageAnalysis::colorThresholding(ImageAnalysis::ColorThreshold color, cv::Mat &inputImage, ImageOf<PixelRgb> &outputImage)
 {
+    // create the mask for the color, the output image and the conversion to hsv temporary matrices
     cv::Mat mask, out, hsv_conv;
+    // convert bgr to hsv
     cv::cvtColor(inputImage, hsv_conv, cv::COLOR_BGR2HSV);
 
+    // create a color mask based on the color argument, the ranges were defined with an external program
     switch (color)
     {
     default:
@@ -54,12 +62,11 @@ void ImageAnalysis::colorThresholding(ImageAnalysis::ColorThreshold color, cv::M
         cv::inRange(hsv_conv, cv::Scalar(90, 100, 0), cv::Scalar(180, 255, 255), mask);
         break;
     }
-
+    // apply bitwise & using the color mask created
     cv::bitwise_and(hsv_conv, hsv_conv, out, mask);
-
+    // convert the image back to rgb
     cv::cvtColor(out, out, cv::COLOR_HSV2RGB);
-
-    cv::GaussianBlur(out, out, cv::Size(3, 3), 0);
+    // memory copy the output matrice data in the yarp Imageof<PixelRgb>
     memcpy(outputImage.getRawImage(), out.data, sizeof(unsigned char) * inputImage.rows * inputImage.cols * inputImage.channels());
 }
 
@@ -86,30 +93,45 @@ void ImageAnalysis::faceDetection(cv::Mat &inputImage, ImageOf<PixelRgb> &output
 {
     vector<cv::Rect> faces;
     cv::Mat grayConv, out;
-    cv::cvtColor(inputImage, grayConv, CV_BGR2GRAY);
+    cv::cvtColor(inputImage, grayConv, CV_BGR2GRAY); // Convert to gray scale
+    // Detect faces using cascade classifier
+    // Input image, array, scale factor, minimum neighbours, flags, minumum size
     cascade.detectMultiScale(grayConv, faces, 1.1, 2, 0 | cv::CASCADE_SCALE_IMAGE, cv::Size(30, 30));
-    cv::cvtColor(inputImage, out, CV_BGR2RGB);
-    //Draw boxes
+    cv::cvtColor(inputImage, out, CV_BGR2RGB); // Convert the input image to RGB
 
-    _faceRecognized = false;
+    // 1+ faces detected
+    if (faces.size() > 0)
+    {
+        // set the face center location as target for the robot head
+        std::pair<double, double> pos;
+        pos.first = faces[0].x + faces[0].width / 2.0;
+        pos.second = faces[0].y + faces[0].height / 2.0;
+        pos.first -= 320 / 2;
+        pos.second -= 240 / 2;
+        pos.first *= 0.2;
+        pos.second *= -0.2;
+        _robot.setFaceLastPos(pos);
+        _stateMachine.OnEvent(Transition::Event::FACE_DETECTED);
+    }
+    // Loop through each face
     for (size_t i = 0; i < faces.size(); i++)
     {
         cv::Rect r = faces[i];
         cv::Scalar color = (0, 255, 0);
+        // Draw rectangle around the face
         cv::rectangle(out, cvPoint(cvRound(r.x), cvRound(r.y)), cvPoint(cvRound(r.x + r.width - 1), cvRound(r.y + r.height - 1)), color, 3);
 
         cv::Mat faceROI = out(r);
         vector<cv::Rect> eyes;
-
-        // Detect eyes in each face
+        // Detect eyes in each face using cascade classifer
         eyesCascade.detectMultiScale(faceROI, eyes, 1.1, 2, 0 | cv::CASCADE_SCALE_IMAGE, cv::Size(30, 30));
         for (size_t j = 0; j < eyes.size(); j++)
         {
             cv::Rect e = eyes[j];
             cv::Point centreEye(r.x + e.x + e.width / 2, r.y + e.y + e.height / 2);
             int radius = cvRound((e.width + e.height) * 0.25);
+            // Draw circles around the eyes
             cv::circle(out, centreEye, radius, cv::Scalar(255, 0, 0), 4, 8, 0);
-            _faceRecognized = true;
         }
     }
     memcpy(outputImage.getRawImage(), out.data, sizeof(unsigned char) * inputImage.rows * inputImage.cols * inputImage.channels());
@@ -118,124 +140,109 @@ void ImageAnalysis::faceDetection(cv::Mat &inputImage, ImageOf<PixelRgb> &output
 void ImageAnalysis::markerDetection(cv::Mat &inputImage, ImageOf<PixelRgb> &outputImage)
 {
     cv::Mat out;
+    // Create a copy of the image feeded in
     inputImage.copyTo(out);
+    // Create stl vector that holds the id of the detected markers
     vector<int> markersId;
+    // Create stl vector that holds the 2D coord
     vector<vector<cv::Point2f>> corners;
+    // detect markers and if detected add the corners location inside the corners list
     cv::aruco::detectMarkers(out, _dict, corners, markersId);
 
     if (markersId.size() > 0)
     {
+        // set the marker top left location as target for the robot head
+        std::pair<double, double> pos;
+        pos.first = corners[0][0].x;
+        pos.second = corners[0][0].y;
+        pos.first -= 320 / 2;
+        pos.second -= 240 / 2;
+        pos.first *= 0.2;
+        pos.second *= -0.2;
+        _robot.setMarkerLastPos(pos);
+        _stateMachine.OnEvent(Transition::Event::MARKER_DETECTED);
+        // draw marker rectangle with id as label
         cv::aruco::drawDetectedMarkers(out, corners, markersId);
     }
     cv::cvtColor(out, out, CV_BGR2RGB);
     memcpy(outputImage.getRawImage(), out.data, sizeof(unsigned char) * inputImage.rows * inputImage.cols * inputImage.channels());
 }
 
-void    ImageAnalysis::locateRedColor(ImageOf<PixelRgb> *feedImage)
+void ImageAnalysis::circleDetection(cv::Mat &inputImage, ImageOf<PixelRgb> &outputImage)
 {
-    if (feedImage != NULL) {
-        double xMean = 0;
-        double yMean = 0;
-        int colourThreshold = 0;
+    cv::Mat gryImg, out;
+    // Convert it to gray - needed for this function but shouldn't when integrated
+    cv::cvtColor(inputImage, gryImg, cv::COLOR_RGB2GRAY);
+    // Reduce the noise so we avoid false circle detection
+    cv::medianBlur(gryImg, gryImg, 5);
+    // Create a vector of size 3 for the circle definition
+    vector<cv::Vec3f> circles;
 
-        for (int x = 0; x < feedImage->width(); x++) {
-            for (int y = 0; y < feedImage->height(); y++) {
-                PixelRgb &pixel = feedImage->pixel(x, y);
-
-                if (pixel.b > pixel.r * 2 + 10 && pixel.b > pixel.g * 2 + 10) {
-                    xMean += x;
-                    yMean += y;
-                    colourThreshold++;
-                }
-            }
-        }
-        if (colourThreshold > 0) {
-            xMean /= colourThreshold;
-            yMean /= colourThreshold;
-        }
-
-        _redPos.first = xMean;
-        _redPos.second = yMean;
-        _redPos.first -= 320 / 2;
-        _redPos.second -= 240 / 2;
-        _redPos.first *= 0.2;
-        _redPos.second *= -0.2;
-
-        if (colourThreshold >
-            (feedImage->width() / 20) * (feedImage->height() / 20)) {
-            _redTracked = true;
-        } else {
-            _redTracked = false;
-            _redPos.first = 0;
-            _redPos.second = 0;
-        }
+    cv::HoughCircles(gryImg, circles, CV_HOUGH_GRADIENT, 2, (gryImg.rows / 4), 200, 100); // (min_radius & max_radius) to detect large circles
+    // 1+ circles detected
+    if (circles.size() > 0)
+    {
+        _stateMachine.OnEvent(Transition::Event::CIRCLE_DETECTED);
     }
+    cv::cvtColor(gryImg, out, cv::COLOR_GRAY2RGB);
+    for (size_t i = 0; i < circles.size(); i++)
+    {
+        //Creates vector of integers of size 3
+        cv::Vec3i c = circles[i];
+        // Round the floating points to a point value
+        cv::Point center = cv::Point(c[0], c[1]);
+        // Draws a dot for the centre location
+        cv::circle(out, center, 1, cv::Scalar(0, 100, 100), 3, cv::LINE_AA); //img, center, radius, colour, thickness, lineType, shift
+        // Draws a circle outline around the detected item
+        int radius = (c[2]);
+        cv::circle(out, center, radius, cv::Scalar(255, 0, 255), 3, cv::LINE_AA); // same as above
+    }
+
+    memcpy(outputImage.getRawImage(), out.data, sizeof(unsigned char) * inputImage.rows * inputImage.cols * inputImage.channels());
 }
 
 int ImageAnalysis::runAnalysis()
 {
     /* INITIALIZE CAMERA AND CONNECT TO TEXTURE */
-    PolyDriver grabber_dev;
-    if (initGrabber(&grabber_dev) == -1) {
+    PolyDriver grabber_dev, head_dev, arm_dev;
+    if (initGrabber(&grabber_dev) == -1)
+    {
         printf("Failed to Initialize Webcam\n");
         return (-1);
     }
-
-    _robot.initRobot();
-
-    while (!_stop) {
+    // initialize robot head and arm drivers
+    _robot.initRobot(&head_dev, &arm_dev);
+    // set the robot as context for the state machine
+    _stateMachine.SetRobot(_robot);
+    while (!_stop)
+    {
+        // read icub left camera
         ImageOf<PixelRgb> *feedImage = _feedPort.read();
+        // prepare all output ports
         ImageOf<PixelRgb> &thImage = _thPort.prepare();
         ImageOf<PixelRgb> &sdImage = _sdPort.prepare();
         ImageOf<PixelRgb> &fdImage = _fdPort.prepare();
         ImageOf<PixelRgb> &mdImage = _mdPort.prepare();
-        thImage = sdImage = fdImage = mdImage = *feedImage;
+        ImageOf<PixelRgb> &cdImage = _cdPort.prepare();
+        thImage = sdImage = fdImage = mdImage = cdImage = *feedImage;
+        // convert the yarp image to cv Matrix to be the inputs of all the image processing functions
         cv::Mat cvFeedImage = yarp::cv::toCvMat(*feedImage);
-        cv::imshow("Feed iCub", cvFeedImage);
+        // default: no event detected
+        _stateMachine.OnEvent(Transition::Event::NO_EVENT);
+        // image processing functions
         colorThresholding(_ct, cvFeedImage, thImage);
         sobelDerivative(cvFeedImage, sdImage);
+        circleDetection(cvFeedImage, cdImage);
         faceDetection(cvFeedImage, fdImage, _cc, _cce);
         markerDetection(cvFeedImage, mdImage);
+        // write the yarp image to the output port
         _thPort.write();
         _sdPort.write();
         _fdPort.write();
         _mdPort.write();
-
-        if (_faceRecognized) {
-            _robot.fuckYou();
-        } else {
-            _robot.resetRightArm();
-        }
-
-        locateRedColor(feedImage);
-        _robot.lookAt(_redPos);
-
-        /*int key = cv::waitKey(3);
-        switch (key) {
-        case 'a':
-            _robot.fuckYou();
-            break;
-        case 'z':
-            _robot.resetRightArm();
-            break;
-        case 'e':
-            _robot.riseRightArm();
-            break;
-        case 'q':
-            _stop = true;
-            break;
-        case 'r':
-            _ct = ColorThreshold::RED;
-            break;
-        case 'g':
-            _ct = ColorThreshold::GREEN;
-            break;
-        case 'b':
-            _ct = ColorThreshold::BLUE;
-            break;
-        default:
-            break;
-        }*/
+        _cdPort.write();
+        // execute the transition
+        _stateMachine.Execute();
     }
     return (0);
 }
@@ -249,7 +256,8 @@ int ImageAnalysis::initImageAnalysis()
 
     /* INITIALIZE CAMERA AND CONNECT TO TEXTURE */
     PolyDriver grabber_dev;
-    if (initGrabber(&grabber_dev) == -1) {
+    if (initGrabber(&grabber_dev) == -1)
+    {
         printf("Failed to Initialize Webcam\n");
         return (-1);
     }
@@ -260,10 +268,11 @@ int ImageAnalysis::initImageAnalysis()
     _sdPort.open("/img_proc/sobel");
     _fdPort.open("/img_proc/face");
     _mdPort.open("/img_proc/marker");
+    _cdPort.open("/img_proc/circle");
 
-    _ct = ColorThreshold::BLUE;
+    _ct = ColorThreshold::GREEN;
 
-    /*CASCADE CLASSIFIER*/
+    // CASCADE CLASSIFIERS FILES
     if (!_cc.load("../haarcascade_frontalface_alt.xml"))
     {
         printf("Error loading face cascade classifier\n");
@@ -274,10 +283,10 @@ int ImageAnalysis::initImageAnalysis()
         printf("Error loading eye cascade classifier\n");
     }
 
-    /*MARKERS DICTIONARY*/
+    // MARKERS DICTIONARY LOADING
     _dict = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_4X4_250);
 
+    // connect the icub left cam to the image feed port
     Network::connect("/icubSim/cam/left", "/img_proc/feed/in");
-    cv::namedWindow("Feed iCub", cv::WINDOW_AUTOSIZE);
     return (0);
 }
