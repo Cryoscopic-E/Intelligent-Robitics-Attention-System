@@ -93,9 +93,11 @@ void ImageAnalysis::faceDetection(cv::Mat &inputImage, ImageOf<PixelRgb> &output
 {
     vector<cv::Rect> faces;
     cv::Mat grayConv, out;
-    cv::cvtColor(inputImage, grayConv, CV_BGR2GRAY);
+    cv::cvtColor(inputImage, grayConv, CV_BGR2GRAY); // Convert to gray scale
+    // Detect faces using cascade classifier
+    // Input image, array, scale factor, minimum neighbours, flags, minumum size
     cascade.detectMultiScale(grayConv, faces, 1.1, 2, 0 | cv::CASCADE_SCALE_IMAGE, cv::Size(30, 30));
-    cv::cvtColor(inputImage, out, CV_BGR2RGB);
+    cv::cvtColor(inputImage, out, CV_BGR2RGB); // Convert the input image to RGB
 
     if (faces.size() > 0)
     {
@@ -109,24 +111,25 @@ void ImageAnalysis::faceDetection(cv::Mat &inputImage, ImageOf<PixelRgb> &output
         _robot.setFaceLastPos(pos);
         _stateMachine.OnEvent(Transition::Event::FACE_DETECTED);
     }
+    // Loop through each face
     for (size_t i = 0; i < faces.size(); i++)
     {
         cv::Rect r = faces[i];
         cv::Scalar color = (0, 255, 0);
+        // Draw rectangle around the face
         cv::rectangle(out, cvPoint(cvRound(r.x), cvRound(r.y)), cvPoint(cvRound(r.x + r.width - 1), cvRound(r.y + r.height - 1)), color, 3);
 
         cv::Mat faceROI = out(r);
         vector<cv::Rect> eyes;
-        // Detect eyes in each face
+        // Detect eyes in each face using cascade classifer
         eyesCascade.detectMultiScale(faceROI, eyes, 1.1, 2, 0 | cv::CASCADE_SCALE_IMAGE, cv::Size(30, 30));
-        if (eyes.size() > 0)
+        for (size_t j = 0; j < eyes.size(); j++)
         {
-            for (size_t j = 0; j < eyes.size(); j++)
-            {
-                cv::Point centreEye(faces[i].x + eyes[j].x + eyes[j].width / 2, faces[i].y + eyes[j].y + eyes[j].height / 2);
-                int radius = cvRound((eyes[j].width + eyes[j].height) * 0.25);
-                cv::circle(out, centreEye, radius, cv::Scalar(255, 0, 0), 4, 8, 0);
-            }
+            cv::Rect e = eyes[j];
+            cv::Point centreEye(r.x + e.x + e.width / 2, r.y + e.y + e.height / 2);
+            int radius = cvRound((e.width + e.height) * 0.25);
+            // Draw circles around the eyes
+            cv::circle(out, centreEye, radius, cv::Scalar(255, 0, 0), 4, 8, 0);
         }
     }
     memcpy(outputImage.getRawImage(), out.data, sizeof(unsigned char) * inputImage.rows * inputImage.cols * inputImage.channels());
