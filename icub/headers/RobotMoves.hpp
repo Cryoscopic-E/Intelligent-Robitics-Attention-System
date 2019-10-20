@@ -17,22 +17,38 @@ using namespace yarp::os;
 using namespace yarp::sig;
 using namespace yarp::dev;
 
-class RobotMoves {
-    public:
+class RobotMoves
+{
+public:
     RobotMoves();
     ~RobotMoves();
 
-    int     initRobot();
-    void    lookAt(std::pair<double, double> pos);
-    void    riseRightArm();
-    void    resetRightArm();
-    void    fuckYou();
+    int initRobot(PolyDriver *headDriver, PolyDriver *armDriver);
+    //idle
+    void idle();
+    //gesture
+    void riseRightArm();
+    //following
+    void followFace();
+    void followMarker();
 
-    private:
-    Vector      _rightArm;
-    Vector      _head;
-    Property    _armOptions;
-    Property    _headOptions;
+    void setFaceLastPos(std::pair<double, double>);
+    void setMarkerLastPos(std::pair<double, double>);
+
+private:
+    Vector _rightArm;
+    Vector _head;
+    IPositionControl *_headPos;
+    IVelocityControl *_headVelocity;
+    IEncoders *_headEncoders;
+    IPositionControl *_rArmPos;
+
+    std::pair<double, double> _faceLastPos;
+    std::pair<double, double> _markerLastPos;
+
+    void lookAt(std::pair<double, double> pos);
+    void resetRightArm();
+    void resetHead();
 };
 
 #endif //INTELLIGENT_ROBITICS_ATTENTION_SYSTEM_ROBOTMOVES_HPP

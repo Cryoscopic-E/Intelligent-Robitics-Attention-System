@@ -5,6 +5,7 @@
 */
 
 #include "ImageAnalysis.hpp"
+#include "Transition.hpp"
 
 ImageAnalysis::ImageAnalysis()
 {
@@ -17,6 +18,7 @@ ImageAnalysis::~ImageAnalysis()
     _sdPort.close();
     _fdPort.close();
     _mdPort.close();
+    _cdPort.close();
     _grabber_dev.close();
 }
 
@@ -89,9 +91,19 @@ void ImageAnalysis::faceDetection(cv::Mat &inputImage, ImageOf<PixelRgb> &output
     cv::cvtColor(inputImage, grayConv, CV_BGR2GRAY);
     cascade.detectMultiScale(grayConv, faces, 1.1, 2, 0 | cv::CASCADE_SCALE_IMAGE, cv::Size(30, 30));
     cv::cvtColor(inputImage, out, CV_BGR2RGB);
-    //Draw boxes
 
-    _faceRecognized = false;
+    if (faces.size() > 0)
+    {
+        std::pair<double, double> pos;
+        pos.first = faces[0].x + faces[0].width / 2.0;
+        pos.second = faces[0].y + faces[0].height / 2.0;
+        pos.first -= 320 / 2;
+        pos.second -= 240 / 2;
+        pos.first *= 0.2;
+        pos.second *= -0.2;
+        _robot.setFaceLastPos(pos);
+        _stateMachine.OnEvent(Transition::Event::FACE_DETECTED);
+    }
     for (size_t i = 0; i < faces.size(); i++)
     {
         cv::Rect r = faces[i];
@@ -100,16 +112,16 @@ void ImageAnalysis::faceDetection(cv::Mat &inputImage, ImageOf<PixelRgb> &output
 
         cv::Mat faceROI = out(r);
         vector<cv::Rect> eyes;
-
         // Detect eyes in each face
         eyesCascade.detectMultiScale(faceROI, eyes, 1.1, 2, 0 | cv::CASCADE_SCALE_IMAGE, cv::Size(30, 30));
-        for (size_t j = 0; j < eyes.size(); j++)
+        if (eyes.size() > 0)
         {
-            cv::Rect e = eyes[j];
-            cv::Point centreEye(r.x + e.x + e.width / 2, r.y + e.y + e.height / 2);
-            int radius = cvRound((e.width + e.height) * 0.25);
-            cv::circle(out, centreEye, radius, cv::Scalar(255, 0, 0), 4, 8, 0);
-            _faceRecognized = true;
+            for (size_t j = 0; j < eyes.size(); j++)
+            {
+                cv::Point centreEye(faces[i].x + eyes[j].x + eyes[j].width / 2, faces[i].y + eyes[j].y + eyes[j].height / 2);
+                int radius = cvRound((eyes[j].width + eyes[j].height) * 0.25);
+                cv::circle(out, centreEye, radius, cv::Scalar(255, 0, 0), 4, 8, 0);
+            }
         }
     }
     memcpy(outputImage.getRawImage(), out.data, sizeof(unsigned char) * inputImage.rows * inputImage.cols * inputImage.channels());
@@ -118,124 +130,98 @@ void ImageAnalysis::faceDetection(cv::Mat &inputImage, ImageOf<PixelRgb> &output
 void ImageAnalysis::markerDetection(cv::Mat &inputImage, ImageOf<PixelRgb> &outputImage)
 {
     cv::Mat out;
+    // Create a copy of the image feeded in
     inputImage.copyTo(out);
+    // Create stl vector that holds the id of the detected markers
     vector<int> markersId;
+    // Create stl vector that holds the 2D coord
     vector<vector<cv::Point2f>> corners;
     cv::aruco::detectMarkers(out, _dict, corners, markersId);
 
     if (markersId.size() > 0)
     {
+        std::pair<double, double> pos;
+        pos.first = corners[0][0].x;
+        pos.second = corners[0][0].y;
+        pos.first -= 320 / 2;
+        pos.second -= 240 / 2;
+        pos.first *= 0.2;
+        pos.second *= -0.2;
+        _robot.setMarkerLastPos(pos);
+        _stateMachine.OnEvent(Transition::Event::MARKER_DETECTED);
         cv::aruco::drawDetectedMarkers(out, corners, markersId);
     }
     cv::cvtColor(out, out, CV_BGR2RGB);
     memcpy(outputImage.getRawImage(), out.data, sizeof(unsigned char) * inputImage.rows * inputImage.cols * inputImage.channels());
 }
 
-void    ImageAnalysis::locateRedColor(ImageOf<PixelRgb> *feedImage)
+void ImageAnalysis::circleDetection(cv::Mat &inputImage, ImageOf<PixelRgb> &outputImage)
 {
-    if (feedImage != NULL) {
-        double xMean = 0;
-        double yMean = 0;
-        int colourThreshold = 0;
+    cv::Mat gryImg, out;
+    // Convert it to gray - needed for this function but shouldn't when integrated
+    cv::cvtColor(inputImage, gryImg, cv::COLOR_RGB2GRAY);
+    medianBlur(gryImg, gryImg, 5);
+    // Reduce the noise so we avoid false circle detection - needed for the function but shouldn't when integrated
+    //GaussianBlur(gryImg, gryImg, Size(9, 9), 2, 2 );
+    vector<cv::Vec3f> circles; // Create a vector of size 3 for the circle definition
 
-        for (int x = 0; x < feedImage->width(); x++) {
-            for (int y = 0; y < feedImage->height(); y++) {
-                PixelRgb &pixel = feedImage->pixel(x, y);
-
-                if (pixel.b > pixel.r * 2 + 10 && pixel.b > pixel.g * 2 + 10) {
-                    xMean += x;
-                    yMean += y;
-                    colourThreshold++;
-                }
-            }
-        }
-        if (colourThreshold > 0) {
-            xMean /= colourThreshold;
-            yMean /= colourThreshold;
-        }
-
-        _redPos.first = xMean;
-        _redPos.second = yMean;
-        _redPos.first -= 320 / 2;
-        _redPos.second -= 240 / 2;
-        _redPos.first *= 0.2;
-        _redPos.second *= -0.2;
-
-        if (colourThreshold >
-            (feedImage->width() / 20) * (feedImage->height() / 20)) {
-            _redTracked = true;
-        } else {
-            _redTracked = false;
-            _redPos.first = 0;
-            _redPos.second = 0;
-        }
+    HoughCircles(gryImg, circles, CV_HOUGH_GRADIENT, 2, (gryImg.rows / 4), 200, 100); // (min_radius & max_radius) to detect large circles
+    if (circles.size() > 0)
+    {
+        _stateMachine.OnEvent(Transition::Event::CIRCLE_DETECTED);
     }
+    cv::cvtColor(gryImg, out, cv::COLOR_GRAY2RGB);
+    for (size_t i = 0; i < circles.size(); i++)
+    {
+        //Creates vector of integers of size 3
+        cv::Vec3i c = circles[i];
+        // Round the floating points to a point value
+        cv::Point center = cv::Point(c[0], c[1]);
+        // Draws a dot for the centre location
+        cv::circle(out, center, 1, cv::Scalar(0, 100, 100), 3, cv::LINE_AA); //img, center, radius, colour, thickness, lineType, shift
+        // Draws a circle outline around the detected item
+        int radius = (c[2]);
+        cv::circle(out, center, radius, cv::Scalar(255, 0, 255), 3, cv::LINE_AA); // same as above
+    }
+
+    memcpy(outputImage.getRawImage(), out.data, sizeof(unsigned char) * inputImage.rows * inputImage.cols * inputImage.channels());
 }
 
 int ImageAnalysis::runAnalysis()
 {
     /* INITIALIZE CAMERA AND CONNECT TO TEXTURE */
-    PolyDriver grabber_dev;
-    if (initGrabber(&grabber_dev) == -1) {
+    PolyDriver grabber_dev, head_dev, arm_dev;
+    if (initGrabber(&grabber_dev) == -1)
+    {
         printf("Failed to Initialize Webcam\n");
         return (-1);
     }
 
-    _robot.initRobot();
-
-    while (!_stop) {
+    _robot.initRobot(&head_dev, &arm_dev);
+    _stateMachine.SetRobot(_robot);
+    while (!_stop)
+    {
         ImageOf<PixelRgb> *feedImage = _feedPort.read();
         ImageOf<PixelRgb> &thImage = _thPort.prepare();
         ImageOf<PixelRgb> &sdImage = _sdPort.prepare();
         ImageOf<PixelRgb> &fdImage = _fdPort.prepare();
         ImageOf<PixelRgb> &mdImage = _mdPort.prepare();
-        thImage = sdImage = fdImage = mdImage = *feedImage;
+        ImageOf<PixelRgb> &cdImage = _cdPort.prepare();
+        thImage = sdImage = fdImage = mdImage = cdImage = *feedImage;
         cv::Mat cvFeedImage = yarp::cv::toCvMat(*feedImage);
-        cv::imshow("Feed iCub", cvFeedImage);
+        //default: no event detected
+        _stateMachine.OnEvent(Transition::Event::NO_EVENT);
         colorThresholding(_ct, cvFeedImage, thImage);
         sobelDerivative(cvFeedImage, sdImage);
+        circleDetection(cvFeedImage, cdImage);
         faceDetection(cvFeedImage, fdImage, _cc, _cce);
         markerDetection(cvFeedImage, mdImage);
         _thPort.write();
         _sdPort.write();
         _fdPort.write();
         _mdPort.write();
-
-        if (_faceRecognized) {
-            _robot.fuckYou();
-        } else {
-            _robot.resetRightArm();
-        }
-
-        locateRedColor(feedImage);
-        _robot.lookAt(_redPos);
-
-        /*int key = cv::waitKey(3);
-        switch (key) {
-        case 'a':
-            _robot.fuckYou();
-            break;
-        case 'z':
-            _robot.resetRightArm();
-            break;
-        case 'e':
-            _robot.riseRightArm();
-            break;
-        case 'q':
-            _stop = true;
-            break;
-        case 'r':
-            _ct = ColorThreshold::RED;
-            break;
-        case 'g':
-            _ct = ColorThreshold::GREEN;
-            break;
-        case 'b':
-            _ct = ColorThreshold::BLUE;
-            break;
-        default:
-            break;
-        }*/
+        _cdPort.write();
+        _stateMachine.Execute();
     }
     return (0);
 }
@@ -249,7 +235,8 @@ int ImageAnalysis::initImageAnalysis()
 
     /* INITIALIZE CAMERA AND CONNECT TO TEXTURE */
     PolyDriver grabber_dev;
-    if (initGrabber(&grabber_dev) == -1) {
+    if (initGrabber(&grabber_dev) == -1)
+    {
         printf("Failed to Initialize Webcam\n");
         return (-1);
     }
@@ -260,6 +247,7 @@ int ImageAnalysis::initImageAnalysis()
     _sdPort.open("/img_proc/sobel");
     _fdPort.open("/img_proc/face");
     _mdPort.open("/img_proc/marker");
+    _cdPort.open("/img_proc/circle");
 
     _ct = ColorThreshold::BLUE;
 
@@ -278,6 +266,5 @@ int ImageAnalysis::initImageAnalysis()
     _dict = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_4X4_250);
 
     Network::connect("/icubSim/cam/left", "/img_proc/feed/in");
-    cv::namedWindow("Feed iCub", cv::WINDOW_AUTOSIZE);
     return (0);
 }
