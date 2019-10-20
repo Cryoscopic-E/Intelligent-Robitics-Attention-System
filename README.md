@@ -19,9 +19,11 @@ Use the bash script to launch the yarp views and connect them to the program por
 
 ## Markers Generator Instructions
 
-1. `cmake .`
-2. `make`
-3. `./aruco_markers`
+1. `mkdir build`
+2. `cd build`
+3. `cmake ../`
+4. `make`
+5. `./aruco_markers`
 
 Use the slider to change the marker image.
 Press 's' to save the current marker.

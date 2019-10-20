@@ -99,8 +99,10 @@ void ImageAnalysis::faceDetection(cv::Mat &inputImage, ImageOf<PixelRgb> &output
     cascade.detectMultiScale(grayConv, faces, 1.1, 2, 0 | cv::CASCADE_SCALE_IMAGE, cv::Size(30, 30));
     cv::cvtColor(inputImage, out, CV_BGR2RGB); // Convert the input image to RGB
 
+    // 1+ faces detected
     if (faces.size() > 0)
     {
+        // set the face center location as target for the robot head
         std::pair<double, double> pos;
         pos.first = faces[0].x + faces[0].width / 2.0;
         pos.second = faces[0].y + faces[0].height / 2.0;
@@ -144,10 +146,12 @@ void ImageAnalysis::markerDetection(cv::Mat &inputImage, ImageOf<PixelRgb> &outp
     vector<int> markersId;
     // Create stl vector that holds the 2D coord
     vector<vector<cv::Point2f>> corners;
+    // detect markers and if detected add the corners location inside the corners list
     cv::aruco::detectMarkers(out, _dict, corners, markersId);
 
     if (markersId.size() > 0)
     {
+        // set the marker top left location as target for the robot head
         std::pair<double, double> pos;
         pos.first = corners[0][0].x;
         pos.second = corners[0][0].y;
@@ -157,6 +161,7 @@ void ImageAnalysis::markerDetection(cv::Mat &inputImage, ImageOf<PixelRgb> &outp
         pos.second *= -0.2;
         _robot.setMarkerLastPos(pos);
         _stateMachine.OnEvent(Transition::Event::MARKER_DETECTED);
+        // draw marker rectangle with id as label
         cv::aruco::drawDetectedMarkers(out, corners, markersId);
     }
     cv::cvtColor(out, out, CV_BGR2RGB);
@@ -174,6 +179,7 @@ void ImageAnalysis::circleDetection(cv::Mat &inputImage, ImageOf<PixelRgb> &outp
     vector<cv::Vec3f> circles;
 
     cv::HoughCircles(gryImg, circles, CV_HOUGH_GRADIENT, 2, (gryImg.rows / 4), 200, 100); // (min_radius & max_radius) to detect large circles
+    // 1+ circles detected
     if (circles.size() > 0)
     {
         _stateMachine.OnEvent(Transition::Event::CIRCLE_DETECTED);
@@ -204,31 +210,38 @@ int ImageAnalysis::runAnalysis()
         printf("Failed to Initialize Webcam\n");
         return (-1);
     }
-
+    // initialize robot head and arm drivers
     _robot.initRobot(&head_dev, &arm_dev);
+    // set the robot as context for the state machine
     _stateMachine.SetRobot(_robot);
     while (!_stop)
     {
+        // read icub left camera
         ImageOf<PixelRgb> *feedImage = _feedPort.read();
+        // prepare all output ports
         ImageOf<PixelRgb> &thImage = _thPort.prepare();
         ImageOf<PixelRgb> &sdImage = _sdPort.prepare();
         ImageOf<PixelRgb> &fdImage = _fdPort.prepare();
         ImageOf<PixelRgb> &mdImage = _mdPort.prepare();
         ImageOf<PixelRgb> &cdImage = _cdPort.prepare();
         thImage = sdImage = fdImage = mdImage = cdImage = *feedImage;
+        // convert the yarp image to cv Matrix to be the inputs of all the image processing functions
         cv::Mat cvFeedImage = yarp::cv::toCvMat(*feedImage);
-        //default: no event detected
+        // default: no event detected
         _stateMachine.OnEvent(Transition::Event::NO_EVENT);
+        // image processing functions
         colorThresholding(_ct, cvFeedImage, thImage);
         sobelDerivative(cvFeedImage, sdImage);
         circleDetection(cvFeedImage, cdImage);
         faceDetection(cvFeedImage, fdImage, _cc, _cce);
         markerDetection(cvFeedImage, mdImage);
+        // write the yarp image to the output port
         _thPort.write();
         _sdPort.write();
         _fdPort.write();
         _mdPort.write();
         _cdPort.write();
+        // execute the transition
         _stateMachine.Execute();
     }
     return (0);
@@ -259,7 +272,7 @@ int ImageAnalysis::initImageAnalysis()
 
     _ct = ColorThreshold::GREEN;
 
-    /*CASCADE CLASSIFIER*/
+    // CASCADE CLASSIFIERS FILES
     if (!_cc.load("../haarcascade_frontalface_alt.xml"))
     {
         printf("Error loading face cascade classifier\n");
@@ -270,9 +283,10 @@ int ImageAnalysis::initImageAnalysis()
         printf("Error loading eye cascade classifier\n");
     }
 
-    /*MARKERS DICTIONARY*/
+    // MARKERS DICTIONARY LOADING
     _dict = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_4X4_250);
 
+    // connect the icub left cam to the image feed port
     Network::connect("/icubSim/cam/left", "/img_proc/feed/in");
     return (0);
 }
