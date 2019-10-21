@@ -118,20 +118,22 @@ void ImageAnalysis::faceDetection(cv::Mat &inputImage, ImageOf<PixelRgb> &output
     {
         cv::Rect r = faces[i];
         cv::Scalar color = (0, 255, 0);
-        // Draw rectangle around the face
+        // Draw rectangle around the face - x and y axis starts at top-left corner
         cv::rectangle(out, cvPoint(cvRound(r.x), cvRound(r.y)), cvPoint(cvRound(r.x + r.width - 1), cvRound(r.y + r.height - 1)), color, 3);
 
-        cv::Mat faceROI = out(r);
+        cv::Mat roi = grayConv(r);
         vector<cv::Rect> eyes;
         // Detect eyes in each face using cascade classifer
-        eyesCascade.detectMultiScale(faceROI, eyes, 1.1, 2, 0 | cv::CASCADE_SCALE_IMAGE, cv::Size(30, 30));
+        eyesCascade.detectMultiScale(roi, eyes, 1.1, 2, 0 | cv::CASCADE_SCALE_IMAGE, cv::Size(30, 30));
         for (size_t j = 0; j < eyes.size(); j++)
         {
             cv::Rect e = eyes[j];
-            cv::Point centreEye(r.x + e.x + e.width / 2, r.y + e.y + e.height / 2);
-            int radius = cvRound((e.width + e.height) * 0.25);
+            // Find the centre of the circles - x and y axis starts at top left corner
+            cv::Point centre(cvRound(r.x) + cvRound(e.x) + cvRound(e.width / 2), cvRound(r.y) + cvRound(e.y) + cvRound(e.height / 2));
+            // Calculate the radius of the circles
+            int radius = cvRound(cvRound((e.width + e.height) * 0.25));
             // Draw circles around the eyes
-            cv::circle(out, centreEye, radius, cv::Scalar(255, 0, 0), 4, 8, 0);
+            cv::circle(out, centre, radius, cv::Scalar(0, 0, 255), 4, 8, 0);
         }
     }
     memcpy(outputImage.getRawImage(), out.data, sizeof(unsigned char) * inputImage.rows * inputImage.cols * inputImage.channels());
